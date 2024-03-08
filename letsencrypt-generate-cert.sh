@@ -31,9 +31,9 @@ do
     domain="${domain%.*}"
 
     docker run -it --rm -p 80:80 \
-      -v /opt/docker/nginx/letsencrypt/conf:/etc/letsencrypt \
-      -v /opt/docker/nginx/letsencrypt/lib:/var/lib/letsencrypt \
-      -v /opt/docker/nginx/webroot:/data/letsencrypt \
-      -v /opt/docker/nginx/letsencrypt/logs:/var/log/letsencrypt \
+      -v $scriptDir/nginx/letsencrypt/conf:/etc/letsencrypt \
+      -v $scriptDir/nginx/letsencrypt/lib:/var/lib/letsencrypt \
+      -v $scriptDir/nginx/webroot:/data/letsencrypt \
+      -v $scriptDir/nginx/letsencrypt/logs:/var/log/letsencrypt \
       certbot/certbot certonly --standalone --expand --webroot-path=/data/letsencrypt --rsa-key-size=4096 -d $domain --no-eff-email --agree-tos -m $email
 done
