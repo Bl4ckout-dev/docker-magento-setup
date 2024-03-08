@@ -1,0 +1,2 @@
+# We dont want live env in our repo
+.env

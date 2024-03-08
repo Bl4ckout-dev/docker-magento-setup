@@ -1,0 +1,106 @@
+version: "1"
+
+services:
+  database:
+    image: bitnami/mariadb:10.6
+    networks:
+      - network_magento
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-password!}
+      - MARIADB_DATABASE=${MAGENTO_DATABASE_NAME:-magento}
+      - MARIADB_USER=${MAGENTO_DATABASE_USER:-magento}
+      - MARIADB_PASSWORD=${MAGENTO_DATABASE_PASSWORD:-magento!}
+    volumes:
+      - ./mariadb:/bitnami/mariadb
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    restart: always
+    networks:
+      - network_magento
+    depends_on:
+      - database
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password!}
+      PMA_HOST: database
+
+  nginx:
+    image: nginx:latest
+    restart: always
+    networks:
+      - network_magento
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      - ./nginx/conf:/etc/nginx/conf.d/:ro
+      - ./nginx/webroot:/usr/share/nginx/html:ro
+      - ./nginx/letsencrypt/conf:/etc/letsencrypt:ro
+    ports:
+      - "443:443"
+      - "80:80"
+
+  certbot:
+    image: certbot/certbot
+    restart: always
+    depends_on:
+      - nginx
+    environment:
+      - TZ=Europe/Berlin
+    volumes:
+      - ./nginx/letsencrypt/conf:/etc/letsencrypt
+      - ./nginx/letsencrypt/lib:/var/lib/letsencrypt
+      - ./nginx/letsencrypt/logs:/var/log/letsencrypt
+      - ./nginx/webroot:/data/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 24h & wait $${!}; done;'"
+
+  elasticsearch:
+    image: bitnami/elasticsearch:7
+    networks:
+      - network_magento
+    volumes:
+      - ./elasticsearch/data:/bitnami/elasticsearch/data
+
+  magento:
+    image: bitnami/magento:latest
+    restart: always
+    networks:
+      - network_magento
+    depends_on:
+      - database
+      - elasticsearch
+      - varnish
+    environment:
+      - MAGENTO_HOST=${MAGENTO_DOMAIN:-localhost}
+      - MAGENTO_ADMIN_URL_PREFIX=${MAGENTO_ADMIN_URL_PREFIX:-admin_0712}
+      - MAGENTO_ENABLE_HTTPS=yes
+      - MAGENTO_ENABLE_ADMIN_HTTPS=yes
+      #- MAGENTO_EMAIL=
+      - MAGENTO_USERNAME=${MAGENTO_ADMIN_USERNAME:-Admin}
+      - MAGENTO_PASSWORD=${MAGENTO_ADMIN_PASSWORD:-admin0712}
+      - MAGENTO_DATABASE_HOST=database
+      - MAGENTO_DATABASE_NAME=${MAGENTO_DATABASE_NAME:-magento}
+      - MAGENTO_DATABASE_USER=${MAGENTO_DATABASE_USER:-magento}
+      - MAGENTO_DATABASE_PASSWORD=${MAGENTO_DATABASE_PASSWORD:-magento!}
+      - MAGENTO_ENABLE_HTTP_CACHE=yes
+      - MAGENTO_HTTP_CACHE_BACKEND_HOST=magento
+      - MAGENTO_HTTP_CACHE_BACKEND_PORT_NUMBER=8080
+      - MAGENTO_HTTP_CACHE_SERVER_HOST=varnish
+      - MAGENTO_HTTP_CACHE_SERVER_PORT_NUMBER=80
+    volumes:
+      - ./magento:/bitnami/magento
+
+  varnish:
+    image: varnish
+    restart: always
+    networks:
+      - network_magento
+    environment:
+      - VARNISH_SIZE=2G
+    volumes:
+      - ./varnish/conf/default.vcl:/etc/varnish/default.vcl:ro
+    tmpfs:
+      - /var/lib/varnish:exec,uid=1000,gid=1000
+    command: "-p default_keep=300"
+
+networks:
+     network_magento:
